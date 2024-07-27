@@ -59,15 +59,18 @@ jobs:
               ;;
           esac
 
-      - name: Restart Docker Container to VM
+      - name: Restart Docker Containers on VM
         run: |
-          echo "Deploy to $DEPLOY_ADDRESS"
-          CI_REGISTRY_IMAGE=ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest
-          
-          if docker -H "$DEPLOY_ADDRESS" ps | grep -q "proom-blue"; then
+          echo "Restarting containers on $DEPLOY_ADDRESS"
+
+          ssh -o StrictHostKeyChecking=no ${{ vars.DEPLOY_USER }}@$DEPLOY_ADDRESS << 'EOF'
+            if docker ps | grep -q "proom-blue"; then
+              echo "proom-blue restarting"
               docker restart proom-blue
-          fi
-          
-          if docker -H "$DEPLOY_ADDRESS" ps | grep -q "proom-green"; then
+            fi
+
+            if docker ps | grep -q "proom-green"; then
+              echo "proom-green restarting"
               docker restart proom-green
-          fi
+            fi
+          EOF

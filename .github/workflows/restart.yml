@@ -1,0 +1,73 @@
+name: Restart Container
+run-name: "Restart ${{ github.event.inputs.environment_var }} (${{ github.ref_name }})"
+on:
+  workflow_dispatch:
+    inputs:
+      environment_var:
+        description: 'Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "ENVIRONMENT=${{ github.event.inputs.environment_var }}" >> $GITHUB_ENV
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Setup SSH config
+        run: |
+          touch ~/.ssh/config
+          echo "Host test-deploy" >> ~/.ssh/config
+          echo "  HostName ${{ vars.TEST_DEPLOY_HOST }}" >> ~/.ssh/config
+          echo "  User ${{ vars.DEPLOY_USER }}" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Extract deploy environment
+        shell: bash
+        run: |
+          case "${{ github.event.inputs.environment_var }}" in
+            production)
+              echo "DEPLOY_ADDRESS=${{ vars.PROD_DEPLOY_HOST }}" >> $GITHUB_ENV
+              ;;
+            staging)
+              echo "DEPLOY_ADDRESS=${{ vars.TEST_DEPLOY_HOST }}" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "Error: Unknown environment '${{ github.event.inputs.environment_var }}'. The pipeline will stop."
+              exit 1
+              ;;
+          esac
+
+      - name: Restart Docker Container to VM
+        run: |
+          echo "Deploy to $DEPLOY_ADDRESS"
+          CI_REGISTRY_IMAGE=ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest
+          
+          if docker -H "$DEPLOY_ADDRESS" ps | grep -q "proom-blue"; then
+              docker restart proom-blue
+          fi
+          
+          if docker -H "$DEPLOY_ADDRESS" ps | grep -q "proom-green"; then
+              docker restart proom-green
+          fi

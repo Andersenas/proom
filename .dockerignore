@@ -1,0 +1,8 @@
+.dockerignore
+.gitignore
+checkstyle.xml
+checkstyle-suppressions.xml
+README.md
+server.dockerfile
+.idea
+*/target/*

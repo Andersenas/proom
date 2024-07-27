@@ -1,0 +1,132 @@
+name: Deploy
+run-name: "Deploy ${{ github.event.inputs.environment_var }} (${{ github.ref_name }})"
+on:
+  workflow_dispatch:
+    inputs:
+      environment_var:
+        description: 'Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '22'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Download maven dependencies
+        run: mvn --batch-mode --update-snapshots verify
+
+      - name: Extract branch name in lowercase
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | sed 's/[\/_]/-/g' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Set environment variables
+        run: |
+          if [ "${{ github.event.inputs.environment_var }}" = "production" ]; then
+            echo "API_URL=${{ vars.PROD_API_URL }}" >> $GITHUB_ENV
+          fi
+          if [ "${{ github.event.inputs.environment_var }}" = "staging" ]; then
+            echo "API_URL=${{ vars.TEST_API_URL }}" >> $GITHUB_ENV
+          fi
+          echo "AUTH_LOGIN=${{ vars.AUTH_LOGIN }}" >> $GITHUB_ENV
+          echo "AUTH_PASSWORD=${{ vars.AUTH_PASSWORD }}" >> $GITHUB_ENV
+          echo "ENVIRONMENT=${{ github.event.inputs.environment_var }}" >> $GITHUB_ENV
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            --build-arg ENVIRONMENT=${{ env.ENVIRONMENT }} \
+            --build-arg API_URL=${{ env.API_URL }} \
+            -f ./server.dockerfile \
+            -t ghcr.io/vasyalike/${{ env.BRANCH_NAME }}:latest .    
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Setup SSH config
+        run: |
+          touch ~/.ssh/config
+          echo "Host test-deploy" >> ~/.ssh/config
+          echo "  HostName ${{ vars.TEST_DEPLOY_HOST }}" >> ~/.ssh/config
+          echo "  User ${{ vars.DEPLOY_USER }}" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker Image to GitHub Container Registry
+        run: docker push ghcr.io/vasyalike/${{ env.BRANCH_NAME }}:latest
+
+      - name: Extract deploy environment
+        shell: bash
+        run: |
+          case "${{ github.event.inputs.environment_var }}" in
+            production)
+              echo "DEPLOY_ADDRESS=ssh://${{ vars.DEPLOY_USER }}@${{ vars.PROD_DEPLOY_HOST }}:${{ vars.PROD_DEPLOY_HOST }}" >> $GITHUB_ENV
+              ;;
+            staging)
+              echo "DEPLOY_ADDRESS=ssh://test-deploy" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "Error: Unknown environment '${{ github.event.inputs.environment_var }}'. The pipeline will stop."
+              exit 1
+              ;;
+          esac
+
+      - name: Deploy Docker Container to VM
+        run: |
+          echo "Deploy to $DEPLOY_ADDRESS"
+          CI_REGISTRY_IMAGE=ghcr.io/vasyalike/${{ env.BRANCH_NAME }}:latest
+          
+          if docker -H "$DEPLOY_ADDRESS" ps | grep -q "proom-blue"; then
+            CURRENT_CONTAINER_NAME="proom-blue"
+            NEW_CONTAINER_NAME="proom-green"
+          else
+            CURRENT_CONTAINER_NAME="proom-green"
+            NEW_CONTAINER_NAME="proom-blue"
+          fi
+          
+          # Pull new image
+          docker -H "$DEPLOY_ADDRESS" pull $CI_REGISTRY_IMAGE
+          
+          # Start the new container
+          docker -H "$DEPLOY_ADDRESS" run -d --name $NEW_CONTAINER_NAME --rm -p 8080:8080 --restart always $CI_REGISTRY_IMAGE
+
+          # Wait for the new container to start successfully
+          until docker -H "$DEPLOY_ADDRESS" ps | grep "$NEW_CONTAINER_NAME"; do
+            echo "Waiting for $NEW_CONTAINER_NAME to become up..."
+            sleep 10
+          done
+
+          if ! docker -H "$DEPLOY_ADDRESS" ps | grep -w "$NEW_CONTAINER_NAME" > /dev/null; then
+            echo "Container $NEW_CONTAINER_NAME is not running."
+            exit 1
+          else
+            echo "Container $NEW_CONTAINER_NAME is running."
+            # Stop and remove the current container
+            docker -H "$DEPLOY_ADDRESS" stop $CURRENT_CONTAINER_NAME
+            docker -H "$DEPLOY_ADDRESS" rm $CURRENT_CONTAINER_NAME
+            docker -H "$DEPLOY_ADDRESS" system prune -a -f
+          fi

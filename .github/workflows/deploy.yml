@@ -51,7 +51,7 @@ jobs:
             --build-arg ENVIRONMENT=${{ env.ENVIRONMENT }} \
             --build-arg API_URL=${{ env.API_URL }} \
             -f ./server.dockerfile \
-            -t ghcr.io/andersenas/proom/${{ env.BRANCH_NAME }}:latest .    
+            -t ghcr.io/vasyalike/${{ env.BRANCH_NAME }}:latest .    
 
       - name: Setup SSH
         run: |

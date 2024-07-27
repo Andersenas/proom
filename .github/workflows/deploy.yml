@@ -51,7 +51,7 @@ jobs:
             --build-arg ENVIRONMENT=${{ env.ENVIRONMENT }} \
             --build-arg API_URL=${{ env.API_URL }} \
             -f ./server.dockerfile \
-            -t ghcr.io/andersenas/proom/${{ env.BRANCH_NAME }}:latest .    
+            -t ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest .    
 
       - name: Setup SSH
         run: |
@@ -77,7 +77,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push Docker Image to GitHub Container Registry
-        run: docker push ghcr.io/andersenas/proom/${{ env.BRANCH_NAME }}:latest
+        run: docker push ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest
 
       - name: Extract deploy environment
         shell: bash
@@ -98,7 +98,7 @@ jobs:
       - name: Deploy Docker Container to VM
         run: |
           echo "Deploy to $DEPLOY_ADDRESS"
-          CI_REGISTRY_IMAGE=ghcr.io/andersenas/proom/${{ env.BRANCH_NAME }}:latest
+          CI_REGISTRY_IMAGE=ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest
           
           if docker -H "$DEPLOY_ADDRESS" ps | grep -q "proom-blue"; then
             CURRENT_CONTAINER_NAME="proom-blue"

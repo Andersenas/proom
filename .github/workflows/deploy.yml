@@ -112,7 +112,7 @@ jobs:
           docker -H "$DEPLOY_ADDRESS" pull $CI_REGISTRY_IMAGE
           
           # Start the new container
-          docker -H "$DEPLOY_ADDRESS" run -d --name $NEW_CONTAINER_NAME -p 8080:8080 --restart always $CI_REGISTRY_IMAGE
+          docker -H "$DEPLOY_ADDRESS" run -d --name $NEW_CONTAINER_NAME --restart always $CI_REGISTRY_IMAGE
 
           # Wait for the new container to start successfully
           until docker -H "$DEPLOY_ADDRESS" ps | grep "$NEW_CONTAINER_NAME"; do
@@ -126,7 +126,9 @@ jobs:
           else
             echo "Container $NEW_CONTAINER_NAME is running."
             # Stop and remove the current container
-            docker -H "$DEPLOY_ADDRESS" stop $CURRENT_CONTAINER_NAME
-            docker -H "$DEPLOY_ADDRESS" rm $CURRENT_CONTAINER_NAME
+            if docker -H "$DEPLOY_ADDRESS" ps | grep -q $CURRENT_CONTAINER_NAME; then
+                docker -H "$DEPLOY_ADDRESS" stop $CURRENT_CONTAINER_NAME
+                docker -H "$DEPLOY_ADDRESS" rm $CURRENT_CONTAINER_NAME
+            fi
             docker -H "$DEPLOY_ADDRESS" system prune -a -f
           fi

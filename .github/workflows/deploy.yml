@@ -11,6 +11,7 @@ on:
         options:
           - production
           - staging
+          - staging2
 
 jobs:
   deploy:
@@ -51,7 +52,7 @@ jobs:
             --build-arg ENVIRONMENT=${{ env.ENVIRONMENT }} \
             --build-arg API_URL=${{ env.API_URL }} \
             -f ./server.dockerfile \
-            -t ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest .    
+            -t ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest-${{GITHUB_SHA}} .    
 
       - name: Setup SSH
         run: |
@@ -77,7 +78,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push Docker Image to GitHub Container Registry
-        run: docker push ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest
+        run: docker push ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest-${{GITHUB_SHA}}
 
       - name: Extract deploy environment
         shell: bash
@@ -98,7 +99,7 @@ jobs:
       - name: Deploy Docker Container to VM
         run: |
           echo "Deploy to $DEPLOY_ADDRESS"
-          CI_REGISTRY_IMAGE=ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest
+          CI_REGISTRY_IMAGE=ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest-${{GITHUB_SHA}}
           
           if docker -H "$DEPLOY_ADDRESS" ps | grep -q "proom-blue"; then
             CURRENT_CONTAINER_NAME="proom-blue"
@@ -111,6 +112,11 @@ jobs:
           # Pull new image
           docker -H "$DEPLOY_ADDRESS" pull $CI_REGISTRY_IMAGE
           
+          if docker -H "$DEPLOY_ADDRESS" ps | grep -q $CURRENT_CONTAINER_NAME; then
+              OLD_IMAGE_NAME=$(docker -H "$DEPLOY_ADDRESS" inspect --format '{{.Config.Image}}' $CURRENT_CONTAINER_NAME)
+              docker -H "$DEPLOY_ADDRESS" stop $CURRENT_CONTAINER_NAME
+          fi
+          
           # Start the new container
           docker -H "$DEPLOY_ADDRESS" run -d --name $NEW_CONTAINER_NAME -p 8080:8080 --restart always $CI_REGISTRY_IMAGE
 
@@ -122,12 +128,12 @@ jobs:
 
           if ! docker -H "$DEPLOY_ADDRESS" ps | grep -w "$NEW_CONTAINER_NAME" > /dev/null; then
             echo "Container $NEW_CONTAINER_NAME is not running."
+            docker -H "$DEPLOY_ADDRESS" run -d --name $NEW_CONTAINER_NAME -p 8080:8080 --restart always $OLD_IMAGE_NAME
             exit 1
           else
             echo "Container $NEW_CONTAINER_NAME is running."
             # Stop and remove the current container
             if docker -H "$DEPLOY_ADDRESS" ps | grep -q $CURRENT_CONTAINER_NAME; then
-                docker -H "$DEPLOY_ADDRESS" stop $CURRENT_CONTAINER_NAME
                 docker -H "$DEPLOY_ADDRESS" rm $CURRENT_CONTAINER_NAME
             fi
             docker -H "$DEPLOY_ADDRESS" system prune -a -f

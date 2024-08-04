@@ -78,7 +78,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push Docker Image to GitHub Container Registry
-        run: docker push ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest-${{GITHUB_SHA}}
+        run: docker push ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest-${{env.GITHUB_SHA}}
 
       - name: Extract deploy environment
         shell: bash
@@ -99,7 +99,7 @@ jobs:
       - name: Deploy Docker Container to VM
         run: |
           echo "Deploy to $DEPLOY_ADDRESS"
-          CI_REGISTRY_IMAGE=ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest-${{GITHUB_SHA}}
+          CI_REGISTRY_IMAGE=ghcr.io/andersenas/proom-${{ env.BRANCH_NAME }}:latest-${{env.GITHUB_SHA}}
           
           if docker -H "$DEPLOY_ADDRESS" ps | grep -q "proom-blue"; then
             CURRENT_CONTAINER_NAME="proom-blue"

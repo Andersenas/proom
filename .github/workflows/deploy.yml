@@ -126,7 +126,8 @@ jobs:
             sleep 10
           done
 
-          if ! docker -H "$DEPLOY_ADDRESS" ps | grep -w "$NEW_CONTAINER_NAME" > /dev/null; then
+          if docker -H "$DEPLOY_ADDRESS" ps | grep -w "$NEW_CONTAINER_NAME" > /dev/null; then
+            docker -H "$DEPLOY_ADDRESS" stop $NEW_CONTAINER_NAME
             echo "Container $NEW_CONTAINER_NAME is not running."
             docker -H "$DEPLOY_ADDRESS" run -d --name $NEW_CONTAINER_NAME -p 8080:8080 --restart always $OLD_IMAGE_NAME
             exit 1

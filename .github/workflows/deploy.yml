@@ -42,6 +42,9 @@ jobs:
           if [ "${{ github.event.inputs.environment_var }}" = "staging" ]; then
             echo "API_URL=${{ vars.TEST_API_URL }}" >> $GITHUB_ENV
           fi
+          if [ "${{ github.event.inputs.environment_var }}" = "staging2" ]; then
+            echo "API_URL=${{ vars.TEST2_API_URL }}" >> $GITHUB_ENV
+          fi
           echo "AUTH_LOGIN=${{ vars.AUTH_LOGIN }}" >> $GITHUB_ENV
           echo "AUTH_PASSWORD=${{ vars.AUTH_PASSWORD }}" >> $GITHUB_ENV
           echo "ENVIRONMENT=${{ github.event.inputs.environment_var }}" >> $GITHUB_ENV
@@ -69,6 +72,9 @@ jobs:
           echo "Host test-deploy" >> ~/.ssh/config
           echo "  HostName ${{ vars.TEST_DEPLOY_HOST }}" >> ~/.ssh/config
           echo "  User ${{ vars.DEPLOY_USER }}" >> ~/.ssh/config
+          echo "Host test2-deploy" >> ~/.ssh/config
+          echo "  HostName ${{ vars.TEST2_DEPLOY_HOST }}" >> ~/.ssh/config
+          echo "  User ${{ vars.DEPLOY_USER }}" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
       - name: Login to GitHub Container Registry
@@ -92,6 +98,10 @@ jobs:
               echo "DEPLOY_ADDRESS=ssh://test-deploy" >> $GITHUB_ENV
               ;;
             *)
+            staging2)
+                echo "DEPLOY_ADDRESS=ssh://test2-deploy" >> $GITHUB_ENV
+                ;;
+              *)
               echo "Error: Unknown environment '${{ github.event.inputs.environment_var }}'. The pipeline will stop."
               exit 1
               ;;

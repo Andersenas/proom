@@ -101,10 +101,6 @@ jobs:
                 echo "DEPLOY_ADDRESS=ssh://test2-deploy" >> $GITHUB_ENV
                 ;;
             *)
-            staging2)
-                echo "DEPLOY_ADDRESS=ssh://test2-deploy" >> $GITHUB_ENV
-                ;;
-              *)
               echo "Error: Unknown environment '${{ github.event.inputs.environment_var }}'. The pipeline will stop."
               exit 1
               ;;

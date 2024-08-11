@@ -11,6 +11,7 @@ on:
         options:
           - production
           - staging
+          - staging2
 
 jobs:
   deploy:
@@ -52,6 +53,9 @@ jobs:
               ;;
             staging)
               echo "DEPLOY_ADDRESS=${{ vars.TEST_DEPLOY_HOST }}" >> $GITHUB_ENV
+              ;;
+            staging2)
+              echo "DEPLOY_ADDRESS=${{ vars.TEST2_DEPLOY_HOST }}" >> $GITHUB_ENV
               ;;
             *)
               echo "Error: Unknown environment '${{ github.event.inputs.environment_var }}'. The pipeline will stop."
